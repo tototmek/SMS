@@ -1,0 +1,26 @@
+function plot_output(y, u, E, y_zad)
+    margin = 
+    ymax = max(y);
+    ymin = min(y);
+    umax = max(u);
+    umin = min(u);
+    dy = max(max(y_zad), ymax) - min(min(y_zad),ymin);
+    du = max(u) - min(u);
+    umin = umin - du * 
+
+    set(groot,'defaultAxesTickLabelInterpreter','latex'); 
+    figure
+    subplot(2,1,1);
+    stairs(y);
+    hold on;
+    stairs(y_zad);
+    ylabel('$y$', 'Interpreter','latex');
+    xlabel('$k$', 'Interpreter','latex');
+    legend({'$y$', '$y^{zad}$'}, 'Interpreter','latex')
+    title(strrep(sprintf("$E=%f$", E), ".", ","), Interpreter="latex");
+    subplot(2,1,2);
+    stairs(u, Color="#EDB120");
+    ylabel('$u$', 'Interpreter','latex');
+    xlabel('$k$', 'Interpreter','latex');
+    legend({'$u$'}, 'Interpreter','latex');
+end
