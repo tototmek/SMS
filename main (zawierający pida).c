@@ -160,45 +160,24 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* AdcHandle)
 	input = tmpval/ADC_BUFFER_LENGTH;
 }
 
-float e;
-float e_k_1;
-float e_k_2;
-float u_k_1;
-float y_zad = 0;
-float r0;
-float r1;
-float r2;
-float up;
-float ui;
-float ui_k_1;
-float Td, Ti, K;
+// Zmienne wykorzystywane w algorytmie regulacji PID
+float e, e_k_1, e_k_2, u_k_1, y_zad = 0;
+float up, ui, ui_k_1, ud, uw_k_1;
+float K = 1;
+float Ti = 10;
+float Td = 0.1;
 float Tv = 0.1689;
-float ud;
-float uw_k_1;
 #define T 0.1
 
-void setPIDParams(float K_, float T_i, float T_d) {
-	r2 = K_ * T_d / T;
-	r1 = K_ * (0.5 * T / T_i - 2 * T_d / T - 1);
-	r0 = K_ * (1 + 0.5 * T / T_i + T_d / T);
-	K = K_;
-	Ti = T_i;
-	Td = T_d;
-}
-
+// Obsługa przerwań timerów
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM2){
+		// Obsługa przerwania timera TIM2 - 10Hz
 		static float y = 0.0f;
 		static float u = 0.0f;
 		y = (input-2048.0f); // przejscie z 0 - 4095 do -2048 - 2047
 
-		/* --- TUTAJ ALGORYTM REGULACJI --- */
-//		e = y_zad - y;
-//		u = r2*e_k_2 + r1*e_k_1 + r0 * e + u_k_1;
-//		e_k_2 = e_k_1;
-//		e_k_1 = e;
-//		u_k_1 = u;
-
+		// Algorytm regulacji PID - wersja z anti-windup
 		e = y_zad - y;
 		up = K * e;
 		ui = ui_k_1 + (K * T / Ti) * 0.5 * (e_k_1 + e) + (T / Tv) * (uw_k_1 - u_k_1);
@@ -209,12 +188,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		u_k_1 = u;
 		ui_k_1 = ui;
 
-		/* -- KONIEC ALGORYTMU REGULACJI -- */
-
+		// Ograniczenie sterowania
 		if(u >  2047.0f) u =  2047.0f;
 		if(u < -2048.0f) u = -2048.0f;
 		uw_k_1 = u;
 		output = u+2048.0f; // przejscie z -2048 - 2047 do 0 - 4095
+
+		// Wyslanie sterowania do DAC
 		updateControlSignalValue(output);
 
 		while(HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_TX);

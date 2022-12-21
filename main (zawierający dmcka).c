@@ -161,41 +161,34 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* AdcHandle)
 	input = tmpval/ADC_BUFFER_LENGTH;
 }
 
-#define T 0.1
-
+// Parametry regulatora DMC
 #define D 40
 #define N 5
 #define Nu 1
 #define lambda 0.1
-
+// Definicje potrzebnych zmiennych
 float y_zad = 0;
-
-
+// K oraz MP wyznaczone przy pomocy MATLABA, przeklejone poniżej
 float K[Nu][N] = {{-0.013505,0.124925,0.452431,0.806947,1.168216}};
-float MP[N][D-1] = {{0.041000,0.097000,0.105000,0.107000,0.105000,0.082000,0.083000,0.070000,0.058000,0.043000,0.037000,0.045000,0.019000,0.025000,0.019000,0.017000,0.012000,0.012000,0.002000,0.007000,0.009000,0.004000,0.000000,0.005000,0.008000,-0.004000,0.000000,0.003000,0.003000,0.000000,0.006000,-0.002000,0.004000,-0.005000,0.006000,-0.006000,0.000000,-0.002000,0.001000},{0.138000,0.202000,0.212000,0.212000,0.187000,0.165000,0.153000,0.128000,0.101000,0.080000,0.082000,0.064000,0.044000,0.044000,0.036000,0.029000,0.024000,0.014000,0.009000,0.016000,0.013000,0.004000,0.005000,0.013000,0.004000,-0.004000,0.003000,0.006000,0.003000,0.006000,0.004000,0.002000,-0.001000,0.001000,0.000000,-0.006000,-0.002000,-0.001000,-0.004000},{0.243000,0.309000,0.317000,0.294000,0.270000,0.235000,0.211000,0.171000,0.138000,0.125000,0.101000,0.089000,0.063000,0.061000,0.048000,0.041000,0.026000,0.021000,0.018000,0.020000,0.013000,0.009000,0.013000,0.009000,0.004000,-0.001000,0.006000,0.006000,0.009000,0.004000,0.008000,-0.003000,0.005000,-0.005000,0.000000,-0.008000,-0.001000,-0.006000,0.003000},{0.350000,0.414000,0.399000,0.377000,0.340000,0.293000,0.254000,0.208000,0.183000,0.144000,0.126000,0.108000,0.080000,0.073000,0.060000,0.043000,0.033000,0.030000,0.022000,0.020000,0.018000,0.017000,0.009000,0.009000,0.007000,0.002000,0.006000,0.012000,0.007000,0.008000,0.003000,0.003000,-0.001000,-0.005000,-0.002000,-0.007000,-0.006000,0.001000,-0.001000},{0.455000,0.496000,0.482000,0.447000,0.398000,0.336000,0.291000,0.253000,0.202000,0.169000,0.145000,0.125000,0.092000,0.085000,0.062000,0.050000,0.042000,0.034000,0.022000,0.025000,0.026000,0.013000,0.009000,0.012000,0.010000,0.002000,0.012000,0.010000,0.011000,0.003000,0.009000,-0.003000,-0.001000,-0.007000,-0.001000,-0.012000,0.001000,-0.003000,0.005000}};
-
-
-
+float MP[N][D-1] = {{0.041000,0.097000,0.105000,0.107000, //... i jeszcze dużo dalej
 float dUP[D-1] = {0};
 float Y_zad[N] = {0};
 float Y[N] = {0};
 float Y0[N] = {0};
 float dU[Nu] = {0};
-
 float u_k_1 = 0;
 float u_k_2 = 0;
 int i, j, k;
+// Obsługa przerwań timerów
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM2){
-
+		// Timer 2 - 10Hz
 		static float y = 0.0f;
 		static float u = 0.0f;
-		y = (input-2048.0f); // przejscie z 0 - 4095 do -2048 - 2047
-
-		/* --- TUTAJ ALGORYTM REGULACJI --- */
+		y = (input-2048.0f);
 		for (i=D-2; i>0; --i)
 		    dUP[i] = dUP[i-1];
-		// Nowy element wektora dup 👉🥵👈
+		// Nowy element wektora dUp
 		dUP[0] = u_k_1 - u_k_2;
 		// Wyznaczenie wektora Y_zad
 		for (i=0; i < N; ++i)
@@ -203,7 +196,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		// Wyznaczenie wektora Y
 		for (i=0; i < N; ++i)
 		     Y[i] = y;
-		// Wyznaczenie wektora Y0 - Mnożenie MP * dup
+		// Wyznaczenie wektora Y0 - Mnożenie MP * dUp
 		for(i=0; i < N; ++i) Y0[i] = 0;
 		for(i=0; i < N; ++i)
 			for(k=0; k < D-1; ++k)
@@ -221,24 +214,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 				dU[i]+=K[i][k]*Y_zad[k];
 		// Prawo regulacji DMC
 		u = u_k_1 + dU[0];
-
-		/* -- KONIEC ALGORYTMU REGULACJI -- */
-
+		// Ograniczenie sygnału sterującego
 		if(u >  2047.0f) u =  2047.0f;
 		if(u < -2048.0f) u = -2048.0f;
 		output = u+2048.0f; // przejscie z -2048 - 2047 do 0 - 4095
+		// Wysłanie sygnału sterującego do DAC
 		updateControlSignalValue(output);
+		// Aktualizacja poprzednich wartości sterowania
 		u_k_2 = u_k_1;
 		u_k_1 = u;
-
-		while(HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_TX);
-		sprintf(text,"U=%.2f;Y=%.2f;Y_zad=%.2f\n;",u,y,y_zad);
-		if(HAL_UART_Transmit_IT(&huart1, (uint8_t*)text, strlen(text))!= HAL_OK){
-			Error_Handler();
-		}
-	} else if (htim->Instance == TIM3){
-	} else if (htim->Instance == TIM4){
-	} else if (htim->Instance == TIM5){
 	}
 }
 /* USER CODE END 0 */
